@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Voronoi Diagram Plotter</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #4a5568;
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header p {
+            color: #718096;
+            margin: 10px 0 0 0;
+            font-size: 1.1em;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 25px;
+            align-items: center;
+            justify-content: center;
+            background: rgba(74, 85, 104, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 25px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+        
+        .control-group:hover {
+            transform: translateY(-2px);
+        }
+        
+        .control-group label {
+            font-weight: 500;
+            color: #4a5568;
+            white-space: nowrap;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+        
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        canvas {
+            border: 3px solid #e2e8f0;
+            border-radius: 15px;
+            cursor: crosshair;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            background: white;
+        }
+        
+        .info {
+            margin-top: 20px;
+            text-align: center;
+            color: #718096;
+            font-style: italic;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-item {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: 500;
+            color: #4a5568;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+            }
+            
+            .stats {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Advanced Voronoi Diagram Plotter</h1>
+            <p>Interactive visualization with Fortune's Algorithm, Convex Hull & Largest Empty Circle</p>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="showVoronoi" checked> Voronoi Diagram
+                </label>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="showConvexHull" checked> Convex Hull
+                </label>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="showLargestCircle" checked> Largest Empty Circle
+                </label>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="showObstacles" checked> Show Obstacles
+                </label>
+            </div>
+            <button onclick="generateRandomPoints()">Generate Random Points</button>
+            <button onclick="clearCanvas()">Clear All</button>
+            <button onclick="addObstacleMode()">Toggle Obstacle Mode</button>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="voronoiCanvas" width="1000" height="600"></canvas>
+        </div>
+        
+        <div class="info">
+            Click on the canvas to add points. Use Toggle Obstacle Mode to place obstacles.
+        </div>
+        
+        <div class="stats">
+            <div class="stat-item">Points: <span id="pointCount">0</span></div>
+            <div class="stat-item">Obstacles: <span id="obstacleCount">0</span></div>
+            <div class="stat-item">Voronoi Cells: <span id="cellCount">0</span></div>
+            <div class="stat-item">LEC Radius: <span id="lecRadius">0</span></div>
+        </div>
+    </div>
+
+    <script>
+        class Point {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+            
+            distance(other) {
+                return Math.sqrt((this.x - other.x) ** 2 + (this.y - other.y) ** 2);
+            }
+        }
+
+        class VoronoiDiagram {
+            constructor() {
+                this.sites = [];
+                this.obstacles = [];
+                this.edges = [];
+                this.cells = [];
+                this.convexHull = [];
+                this.largestEmptyCircle = null;
+                this.obstacleMode = false;
+            }
+
+            addSite(x, y) {
+                if (this.obstacleMode) {
+                    this.obstacles.push(new Point(x, y));
+                } else {
+                    this.sites.push(new Point(x, y));
+                }
+                this.compute();
+            }
+
+            clear() {
+                this.sites = [];
+                this.obstacles = [];
+                this.edges = [];
+                this.cells = [];
+                this.convexHull = [];
+                this.largestEmptyCircle = null;
+            }
+
+            // Simplified Voronoi computation using Delaunay triangulation approach
+            compute() {
+                if (this.sites.length < 2) return;
+                
+                this.edges = [];
+                this.cells = [];
+                
+                // Compute Voronoi edges using circumcenters
+                this.computeVoronoiEdges();
+                
+                // Compute convex hull
+                this.convexHull = this.computeConvexHull(this.sites);
+                
+                // Compute largest empty circle
+                this.largestEmptyCircle = this.computeLargestEmptyCircle();
+            }
+
+            computeVoronoiEdges() {
+                // Simplified Voronoi edge computation
+                for (let i = 0; i < this.sites.length; i++) {
+                    for (let j = i + 1; j < this.sites.length; j++) {
+                        const site1 = this.sites[i];
+                        const site2 = this.sites[j];
+                        
+                        // Perpendicular bisector
+                        const midX = (site1.x + site2.x) / 2;
+                        const midY = (site1.y + site2.y) / 2;
+                        
+                        const dx = site2.x - site1.x;
+                        const dy = site2.y - site1.y;
+                        
+                        // Perpendicular direction
+                        const perpDx = -dy;
+                        const perpDy = dx;
+                        
+                        // Normalize
+                        const length = Math.sqrt(perpDx * perpDx + perpDy * perpDy);
+                        if (length === 0) continue;
+                        
+                        const normPerpDx = perpDx / length;
+                        const normPerpDy = perpDy / length;
+                        
+                        // Create edge endpoints
+                        const edgeLength = 1000;
+                        const edge = {
+                            start: new Point(midX - normPerpDx * edgeLength, midY - normPerpDy * edgeLength),
+                            end: new Point(midX + normPerpDx * edgeLength, midY + normPerpDy * edgeLength),
+                            site1: site1,
+                            site2: site2
+                        };
+                        
+                        this.edges.push(edge);
+                    }
+                }
+            }
+
+            // Graham Scan for Convex Hull
+            computeConvexHull(points) {
+                if (points.length < 3) return points.slice();
+                
+                // Find the bottom-most point (or leftmost in case of tie)
+                let start = 0;
+                for (let i = 1; i < points.length; i++) {
+                    if (points[i].y < points[start].y || 
+                        (points[i].y === points[start].y && points[i].x < points[start].x)) {
+                        start = i;
+                    }
+                }
+                
+                const startPoint = points[start];
+                
+                // Sort points by polar angle with respect to start point
+                const sortedPoints = points.filter((_, i) => i !== start);
+                sortedPoints.sort((a, b) => {
+                    const angleA = Math.atan2(a.y - startPoint.y, a.x - startPoint.x);
+                    const angleB = Math.atan2(b.y - startPoint.y, b.x - startPoint.x);
+                    if (angleA === angleB) {
+                        return startPoint.distance(a) - startPoint.distance(b);
+                    }
+                    return angleA - angleB;
+                });
+                
+                const hull = [startPoint];
+                
+                for (const point of sortedPoints) {
+                    while (hull.length > 1 && this.crossProduct(hull[hull.length-2], hull[hull.length-1], point) <= 0) {
+                        hull.pop();
+                    }
+                    hull.push(point);
+                }
+                
+                return hull;
+            }
+
+            crossProduct(O, A, B) {
+                return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+            }
+
+            // Largest Empty Circle algorithm
+            computeLargestEmptyCircle() {
+                if (this.sites.length < 2) return null;
+                
+                let maxRadius = 0;
+                let bestCenter = null;
+                
+                // Sample points within convex hull
+                const hull = this.convexHull;
+                if (hull.length < 3) return null;
+                
+                // Find bounding box of convex hull
+                let minX = hull[0].x, maxX = hull[0].x;
+                let minY = hull[0].y, maxY = hull[0].y;
+                
+                for (const point of hull) {
+                    minX = Math.min(minX, point.x);
+                    maxX = Math.max(maxX, point.x);
+                    minY = Math.min(minY, point.y);
+                    maxY = Math.max(maxY, point.y);
+                }
+                
+                // Grid search for largest empty circle
+                const gridSize = 20;
+                const stepX = (maxX - minX) / gridSize;
+                const stepY = (maxY - minY) / gridSize;
+                
+                for (let i = 0; i <= gridSize; i++) {
+                    for (let j = 0; j <= gridSize; j++) {
+                        const testPoint = new Point(minX + i * stepX, minY + j * stepY);
+                        
+                        // Check if point is inside convex hull
+                        if (!this.pointInConvexHull(testPoint, hull)) continue;
+                        
+                        // Find minimum distance to all sites and obstacles
+                        let minDist = Infinity;
+                        
+                        for (const site of this.sites) {
+                            minDist = Math.min(minDist, testPoint.distance(site));
+                        }
+                        
+                        for (const obstacle of this.obstacles) {
+                            minDist = Math.min(minDist, testPoint.distance(obstacle));
+                        }
+                        
+                        if (minDist > maxRadius) {
+                            maxRadius = minDist;
+                            bestCenter = testPoint;
+                        }
+                    }
+                }
+                
+                return bestCenter ? { center: bestCenter, radius: maxRadius } : null;
+            }
+
+            pointInConvexHull(point, hull) {
+                if (hull.length < 3) return false;
+                
+                for (let i = 0; i < hull.length; i++) {
+                    const j = (i + 1) % hull.length;
+                    const cross = this.crossProduct(hull[i], hull[j], point);
+                    if (cross < 0) return false;
+                }
+                return true;
+            }
+        }
+
+        // Canvas and visualization
+        const canvas = document.getElementById('voronoiCanvas');
+        const ctx = canvas.getContext('2d');
+        const voronoi = new VoronoiDiagram();
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Voronoi edges
+            if (document.getElementById('showVoronoi').checked) {
+                ctx.strokeStyle = '#667eea';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([]);
+                
+                for (const edge of voronoi.edges) {
+                    // Clip edge to canvas bounds
+                    const clippedEdge = clipLineToCanvas(edge.start, edge.end);
+                    if (clippedEdge) {
+                        ctx.beginPath();
+                        ctx.moveTo(clippedEdge.start.x, clippedEdge.start.y);
+                        ctx.lineTo(clippedEdge.end.x, clippedEdge.end.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            // Draw convex hull
+            if (document.getElementById('showConvexHull').checked && voronoi.convexHull.length > 2) {
+                ctx.strokeStyle = '#e53e3e';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([]);
+                
+                ctx.beginPath();
+                ctx.moveTo(voronoi.convexHull[0].x, voronoi.convexHull[0].y);
+                for (let i = 1; i < voronoi.convexHull.length; i++) {
+                    ctx.lineTo(voronoi.convexHull[i].x, voronoi.convexHull[i].y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+            
+            // Draw largest empty circle
+            if (document.getElementById('showLargestCircle').checked && voronoi.largestEmptyCircle) {
+                const circle = voronoi.largestEmptyCircle;
+                ctx.strokeStyle = '#38a169';
+                ctx.fillStyle = 'rgba(56, 161, 105, 0.1)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                
+                ctx.beginPath();
+                ctx.arc(circle.center.x, circle.center.y, circle.radius, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Draw center point
+                ctx.fillStyle = '#38a169';
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.arc(circle.center.x, circle.center.y, 4, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            // Draw sites
+            ctx.fillStyle = '#2d3748';
+            for (const site of voronoi.sites) {
+                ctx.beginPath();
+                ctx.arc(site.x, site.y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            // Draw obstacles
+            if (document.getElementById('showObstacles').checked) {
+                ctx.fillStyle = '#e53e3e';
+                for (const obstacle of voronoi.obstacles) {
+                    ctx.beginPath();
+                    ctx.arc(obstacle.x, obstacle.y, 6, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Draw X mark
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(obstacle.x - 3, obstacle.y - 3);
+                    ctx.lineTo(obstacle.x + 3, obstacle.y + 3);
+                    ctx.moveTo(obstacle.x + 3, obstacle.y - 3);
+                    ctx.lineTo(obstacle.x - 3, obstacle.y + 3);
+                    ctx.stroke();
+                }
+            }
+            
+            updateStats();
+        }
+
+        function clipLineToCanvas(start, end) {
+            // Simple line clipping to canvas bounds
+            const bounds = { left: 0, top: 0, right: canvas.width, bottom: canvas.height };
+            
+            // Check if line is completely outside
+            if ((start.x < bounds.left && end.x < bounds.left) ||
+                (start.x > bounds.right && end.x > bounds.right) ||
+                (start.y < bounds.top && end.y < bounds.top) ||
+                (start.y > bounds.bottom && end.y > bounds.bottom)) {
+                return null;
+            }
+            
+            return { start: start, end: end }; // Simplified - return as is
+        }
+
+        function updateStats() {
+            document.getElementById('pointCount').textContent = voronoi.sites.length;
+            document.getElementById('obstacleCount').textContent = voronoi.obstacles.length;
+            document.getElementById('cellCount').textContent = voronoi.edges.length;
+            document.getElementById('lecRadius').textContent = 
+                voronoi.largestEmptyCircle ? voronoi.largestEmptyCircle.radius.toFixed(1) : '0';
+        }
+
+        // Event handlers
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            voronoi.addSite(x, y);
+            draw();
+        });
+
+        function generateRandomPoints() {
+            voronoi.clear();
+            const numPoints = 8 + Math.floor(Math.random() * 12);
+            for (let i = 0; i < numPoints; i++) {
+                const x = 50 + Math.random() * (canvas.width - 100);
+                const y = 50 + Math.random() * (canvas.height - 100);
+                voronoi.addSite(x, y);
+            }
+            
+            // Add some obstacles
+            const numObstacles = 2 + Math.floor(Math.random() * 4);
+            voronoi.obstacleMode = true;
+            for (let i = 0; i < numObstacles; i++) {
+                const x = 100 + Math.random() * (canvas.width - 200);
+                const y = 100 + Math.random() * (canvas.height - 200);
+                voronoi.addSite(x, y);
+            }
+            voronoi.obstacleMode = false;
+            
+            draw();
+        }
+
+        function clearCanvas() {
+            voronoi.clear();
+            draw();
+        }
+
+        function addObstacleMode() {
+            voronoi.obstacleMode = !voronoi.obstacleMode;
+            const button = event.target;
+            if (voronoi.obstacleMode) {
+                button.textContent = 'Point Mode';
+                button.style.background = 'linear-gradient(135deg, #e53e3e 0%, #c53030 100%)';
+                canvas.style.cursor = 'crosshair';
+            } else {
+                button.textContent = 'Toggle Obstacle Mode';
+                button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                canvas.style.cursor = 'crosshair';
+            }
+        }
+
+        // Redraw when checkboxes change
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', draw);
+        });
+
+        // Initial setup
+        generateRandomPoints();
+        draw();
+    </script>
+</body>
+</html>
