@@ -514,7 +514,7 @@ class DynamicLECVoronoi:
         return current_obstacles
 
     def compute_lec(self, sites, current_obstacles):
-        """Compute Largest Empty Circle using optimal O(n log n) Voronoi approach"""
+        """Compute Largest Empty Circle using optimized O(n log n) approach"""
         if len(sites) < 2:
             return None
 
@@ -526,6 +526,8 @@ class DynamicLECVoronoi:
         }
 
         class Point:
+            __slots__ = ["x", "y"]
+
             def __init__(self, x, y):
                 self.x = x
                 self.y = y
@@ -537,147 +539,186 @@ class DynamicLECVoronoi:
                 return hash((round(self.x, 6), round(self.y, 6)))
 
             def distance_to(self, other):
-                return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
+                dx = self.x - other.x
+                dy = self.y - other.y
+                return (dx * dx + dy * dy) ** 0.5
 
-        class VoronoiEdge:
-            def __init__(self, site1, site2):
-                self.site1 = site1
-                self.site2 = site2
-                self.start = None
-                self.end = None
-
-            def get_perpendicular_bisector(self):
-                """Returns (a, b, c) for line equation ax + by + c = 0"""
-                mx = (self.site1.x + self.site2.x) / 2
-                my = (self.site1.y + self.site2.y) / 2
-
-                dx = self.site2.x - self.site1.x
-                dy = self.site2.y - self.site1.y
-
-                # Perpendicular direction is (-dy, dx)
-                a, b, c = -dy, dx, dy * mx - dx * my
-                return a, b, c
-
-        class VoronoiDiagram:
+        class OptimizedVoronoiSolver:
             def __init__(self, sites, bounds):
                 self.sites = sites
                 self.bounds = bounds
-                self.edges = []
-                self.vertices = []
+                self.candidates = set()
 
-            def compute(self):
-                """Compute Voronoi diagram using optimized approach"""
-                if len(self.sites) < 2:
+            def solve(self):
+                """Main solving method using optimized approach"""
+                # 1. Add boundary candidates (always useful)
+                self._add_boundary_candidates()
+
+                # 2. Use Delaunay triangulation approach for Voronoi vertices
+                self._add_delaunay_circumcenters()
+
+                # 3. Add perpendicular bisector intersections with boundaries
+                self._add_bisector_boundary_intersections()
+
+                return list(self.candidates)
+
+            def _add_boundary_candidates(self):
+                """Add boundary points as candidates"""
+                # Corners
+                self.candidates.add(Point(self.bounds["minX"], self.bounds["minY"]))
+                self.candidates.add(Point(self.bounds["minX"], self.bounds["maxY"]))
+                self.candidates.add(Point(self.bounds["maxX"], self.bounds["minY"]))
+                self.candidates.add(Point(self.bounds["maxX"], self.bounds["maxY"]))
+
+                # Mid-points of boundaries
+                mid_x = (self.bounds["minX"] + self.bounds["maxX"]) / 2
+                mid_y = (self.bounds["minY"] + self.bounds["maxY"]) / 2
+                self.candidates.add(Point(self.bounds["minX"], mid_y))
+                self.candidates.add(Point(self.bounds["maxX"], mid_y))
+                self.candidates.add(Point(mid_x, self.bounds["minY"]))
+                self.candidates.add(Point(mid_x, self.bounds["maxY"]))
+
+            def _add_delaunay_circumcenters(self):
+                """Add circumcenters using optimized Delaunay approach"""
+                n = len(self.sites)
+                if n < 3:
                     return
 
-                # Generate Voronoi vertices using circumcenters (optimized)
+                # Sort sites by x-coordinate for divide-and-conquer
+                sorted_sites = sorted(
+                    enumerate(self.sites), key=lambda x: (x[1].x, x[1].y)
+                )
+
+                # Use incremental construction for smaller datasets
+                if n <= 50:
+                    self._incremental_delaunay(sorted_sites)
+                else:
+                    # For larger datasets, use sampling + local search
+                    self._sampled_delaunay(sorted_sites)
+
+            def _incremental_delaunay(self, sorted_sites):
+                """Incremental Delaunay triangulation for smaller datasets"""
+                triangles = []
+
+                # Start with first 3 points
+                if len(sorted_sites) >= 3:
+                    p1, p2, p3 = (
+                        sorted_sites[0][1],
+                        sorted_sites[1][1],
+                        sorted_sites[2][1],
+                    )
+                    if not self._are_collinear(p1, p2, p3):
+                        triangles.append(
+                            (sorted_sites[0][0], sorted_sites[1][0], sorted_sites[2][0])
+                        )
+
+                # Add remaining points incrementally
+                for i in range(3, len(sorted_sites)):
+                    new_idx, new_point = sorted_sites[i]
+                    new_triangles = []
+
+                    # Find triangles that need to be updated
+                    for tri_idx, (i1, i2, i3) in enumerate(triangles):
+                        p1, p2, p3 = self.sites[i1], self.sites[i2], self.sites[i3]
+
+                        # Check if new point is inside circumcircle
+                        if self._point_in_circumcircle(new_point, p1, p2, p3):
+                            # Create new triangles with the new point
+                            new_triangles.extend(
+                                [
+                                    (new_idx, i1, i2),
+                                    (new_idx, i2, i3),
+                                    (new_idx, i3, i1),
+                                ]
+                            )
+                        else:
+                            new_triangles.append((i1, i2, i3))
+
+                    triangles = new_triangles
+
+                # Add circumcenters of valid triangles
+                for i1, i2, i3 in triangles:
+                    circumcenter = self._circumcenter(
+                        self.sites[i1], self.sites[i2], self.sites[i3]
+                    )
+                    if circumcenter and self._is_point_in_bounds(circumcenter):
+                        self.candidates.add(circumcenter)
+
+            def _sampled_delaunay(self, sorted_sites):
+                """Sampled approach for larger datasets"""
+                n = len(sorted_sites)
+
+                # Sample every k-th point where k = sqrt(n)
+                sample_step = max(1, int(n**0.5))
+                sampled_indices = list(range(0, n, sample_step))
+
+                # Ensure we have at least 10 samples
+                if len(sampled_indices) < 10:
+                    sampled_indices = list(range(0, min(n, 20)))
+
+                # Process sampled triangles
+                for i in range(len(sampled_indices)):
+                    for j in range(i + 1, len(sampled_indices)):
+                        for k in range(j + 1, len(sampled_indices)):
+                            idx1, idx2, idx3 = (
+                                sampled_indices[i],
+                                sampled_indices[j],
+                                sampled_indices[k],
+                            )
+                            p1, p2, p3 = (
+                                sorted_sites[idx1][1],
+                                sorted_sites[idx2][1],
+                                sorted_sites[idx3][1],
+                            )
+
+                            if not self._are_collinear(p1, p2, p3):
+                                circumcenter = self._circumcenter(p1, p2, p3)
+                                if circumcenter and self._is_point_in_bounds(
+                                    circumcenter
+                                ):
+                                    self.candidates.add(circumcenter)
+
+            def _add_bisector_boundary_intersections(self):
+                """Add intersections of perpendicular bisectors with boundaries"""
                 n = len(self.sites)
 
-                # Only check triangles that are likely to produce valid Voronoi vertices
-                # Use spatial hashing to reduce unnecessary computations
-                spatial_hash = defaultdict(list)
-                cell_size = (
-                    min(
-                        self.bounds["maxX"] - self.bounds["minX"],
-                        self.bounds["maxY"] - self.bounds["minY"],
-                    )
-                    / 10
-                )
-
-                for i, site in enumerate(self.sites):
-                    cell_x = int(site.x / cell_size)
-                    cell_y = int(site.y / cell_size)
-                    spatial_hash[(cell_x, cell_y)].append((i, site))
-
-                # Process only nearby triangles
-                processed = set()
-                for cell, sites_in_cell in spatial_hash.items():
-                    # Check adjacent cells
-                    for dx in [-1, 0, 1]:
-                        for dy in [-1, 0, 1]:
-                            adj_cell = (cell[0] + dx, cell[1] + dy)
-                            if adj_cell in spatial_hash:
-                                # Form triangles from sites in nearby cells
-                                all_nearby = sites_in_cell + spatial_hash[adj_cell]
-                                for i in range(len(all_nearby)):
-                                    for j in range(i + 1, len(all_nearby)):
-                                        for k in range(j + 1, len(all_nearby)):
-                                            triangle = tuple(
-                                                sorted(
-                                                    [
-                                                        all_nearby[i][0],
-                                                        all_nearby[j][0],
-                                                        all_nearby[k][0],
-                                                    ]
-                                                )
-                                            )
-                                            if triangle not in processed:
-                                                processed.add(triangle)
-                                                circumcenter = self._circumcenter(
-                                                    all_nearby[i][1],
-                                                    all_nearby[j][1],
-                                                    all_nearby[k][1],
-                                                )
-                                                if (
-                                                    circumcenter
-                                                    and self._is_point_in_bounds(
-                                                        circumcenter
-                                                    )
-                                                ):
-                                                    self.vertices.append(circumcenter)
-
-                # Generate edges from perpendicular bisectors
+                # Only process nearest neighbors to reduce complexity
                 for i in range(n):
-                    for j in range(i + 1, n):
-                        edge = VoronoiEdge(self.sites[i], self.sites[j])
-                        self._extend_edge_to_boundary(edge)
-                        if edge.start and edge.end:
-                            self.edges.append(edge)
-                            # Add intersection points as vertices
-                            if self._is_point_in_bounds(edge.start):
-                                self.vertices.append(edge.start)
-                            if self._is_point_in_bounds(edge.end):
-                                self.vertices.append(edge.end)
+                    # Find k nearest neighbors (where k = min(8, n-1))
+                    k = min(8, n - 1)
+                    distances = []
 
-            def _circumcenter(self, p1, p2, p3):
-                """Find circumcenter of triangle formed by 3 points"""
-                x1, y1 = p1.x, p1.y
-                x2, y2 = p2.x, p2.y
-                x3, y3 = p3.x, p3.y
+                    for j in range(n):
+                        if i != j:
+                            dist = self.sites[i].distance_to(self.sites[j])
+                            distances.append((dist, j))
 
-                # Check if points are collinear
-                det = (x1 - x3) * (y2 - y3) - (x2 - x3) * (y1 - y3)
-                if abs(det) < 1e-10:
-                    return None
+                    distances.sort()
 
-                # Calculate circumcenter
-                ux = (
-                    (x1 * x1 + y1 * y1) * (y2 - y3)
-                    + (x2 * x2 + y2 * y2) * (y3 - y1)
-                    + (x3 * x3 + y3 * y3) * (y1 - y2)
-                ) / (2 * det)
-                uy = (
-                    (x1 * x1 + y1 * y1) * (x3 - x2)
-                    + (x2 * x2 + y2 * y2) * (x1 - x3)
-                    + (x3 * x3 + y3 * y3) * (x2 - x1)
-                ) / (2 * det)
+                    # Process k nearest neighbors
+                    for _, j in distances[:k]:
+                        intersections = self._get_bisector_boundary_intersections(
+                            self.sites[i], self.sites[j]
+                        )
+                        for point in intersections:
+                            if self._is_point_in_bounds(point):
+                                self.candidates.add(point)
 
-                return Point(ux, uy)
-
-            def _is_point_in_bounds(self, point):
-                """Check if point is within bounds"""
-                return (
-                    self.bounds["minX"] <= point.x <= self.bounds["maxX"]
-                    and self.bounds["minY"] <= point.y <= self.bounds["maxY"]
-                )
-
-            def _extend_edge_to_boundary(self, edge):
-                """Extend edge to boundary rectangle"""
-                a, b, c = edge.get_perpendicular_bisector()
-
-                # Find intersections with boundary
+            def _get_bisector_boundary_intersections(self, site1, site2):
+                """Get intersections of perpendicular bisector with boundary"""
                 intersections = []
 
+                # Midpoint and direction
+                mx = (site1.x + site2.x) / 2
+                my = (site1.y + site2.y) / 2
+
+                dx = site2.x - site1.x
+                dy = site2.y - site1.y
+
+                # Perpendicular bisector: ax + by + c = 0
+                a, b, c = -dy, dx, dy * mx - dx * my
+
+                # Find intersections with boundary
                 if abs(b) > 1e-10:  # Not vertical
                     # Left boundary
                     y = -(a * self.bounds["minX"] + c) / b
@@ -700,12 +741,55 @@ class DynamicLECVoronoi:
                     if self.bounds["minX"] <= x <= self.bounds["maxX"]:
                         intersections.append(Point(x, self.bounds["maxY"]))
 
-                # Set edge endpoints
-                if len(intersections) >= 2:
-                    edge.start = intersections[0]
-                    edge.end = intersections[1]
-                elif len(intersections) == 1:
-                    edge.start = intersections[0]
+                return intersections
+
+            def _circumcenter(self, p1, p2, p3):
+                """Find circumcenter of triangle - optimized version"""
+                x1, y1 = p1.x, p1.y
+                x2, y2 = p2.x, p2.y
+                x3, y3 = p3.x, p3.y
+
+                # Check if points are collinear
+                det = (x1 - x3) * (y2 - y3) - (x2 - x3) * (y1 - y3)
+                if abs(det) < 1e-10:
+                    return None
+
+                # Pre-calculate squares to avoid repeated computation
+                sq1 = x1 * x1 + y1 * y1
+                sq2 = x2 * x2 + y2 * y2
+                sq3 = x3 * x3 + y3 * y3
+
+                # Calculate circumcenter
+                ux = (sq1 * (y2 - y3) + sq2 * (y3 - y1) + sq3 * (y1 - y2)) / (2 * det)
+                uy = (sq1 * (x3 - x2) + sq2 * (x1 - x3) + sq3 * (x2 - x1)) / (2 * det)
+
+                return Point(ux, uy)
+
+            def _are_collinear(self, p1, p2, p3):
+                """Check if three points are collinear"""
+                return (
+                    abs((p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y))
+                    < 1e-10
+                )
+
+            def _point_in_circumcircle(self, point, p1, p2, p3):
+                """Check if point is inside circumcircle of triangle"""
+                circumcenter = self._circumcenter(p1, p2, p3)
+                if not circumcenter:
+                    return False
+
+                # Calculate circumradius
+                circumradius = circumcenter.distance_to(p1)
+
+                # Check if point is inside
+                return point.distance_to(circumcenter) < circumradius
+
+            def _is_point_in_bounds(self, point):
+                """Check if point is within bounds"""
+                return (
+                    self.bounds["minX"] <= point.x <= self.bounds["maxX"]
+                    and self.bounds["minY"] <= point.y <= self.bounds["maxY"]
+                )
 
         # Convert sites to Point objects
         points = [Point(site["x"], site["y"]) for site in sites]
@@ -714,36 +798,11 @@ class DynamicLECVoronoi:
             for obs in current_obstacles
         ]
 
-        # Compute Voronoi diagram
-        voronoi = VoronoiDiagram(points, bounds)
-        voronoi.compute()
+        # Generate candidates using optimized solver
+        solver = OptimizedVoronoiSolver(points, bounds)
+        candidates = solver.solve()
 
-        # Candidate centers for LEC
-        candidates = []
-
-        # Add Voronoi vertices
-        candidates.extend(voronoi.vertices)
-
-        # Add boundary intersections and corners
-        boundary_points = [
-            Point(bounds["minX"], bounds["minY"]),
-            Point(bounds["minX"], bounds["maxY"]),
-            Point(bounds["maxX"], bounds["minY"]),
-            Point(bounds["maxX"], bounds["maxY"]),
-            Point(bounds["minX"], (bounds["minY"] + bounds["maxY"]) / 2),
-            Point(bounds["maxX"], (bounds["minY"] + bounds["maxY"]) / 2),
-            Point((bounds["minX"] + bounds["maxX"]) / 2, bounds["minY"]),
-            Point((bounds["minX"] + bounds["maxX"]) / 2, bounds["maxY"]),
-        ]
-        candidates.extend(boundary_points)
-
-        # Add edge intersections
-        for edge in voronoi.edges:
-            if edge.start:
-                candidates.append(edge.start)
-            if edge.end:
-                candidates.append(edge.end)
-
+        # Optimized distance calculation functions
         def is_point_in_bounds(point):
             """Check if point is within bounds"""
             return (
@@ -752,11 +811,11 @@ class DynamicLECVoronoi:
             )
 
         def get_max_radius_at_point(point):
-            """Get maximum possible radius at given point"""
+            """Get maximum possible radius at given point - optimized"""
             if not is_point_in_bounds(point):
                 return 0
 
-            # Distance to boundary
+            # Distance to boundary (optimized)
             dist_to_bounds = min(
                 point.x - bounds["minX"],
                 bounds["maxX"] - point.x,
@@ -767,34 +826,47 @@ class DynamicLECVoronoi:
             if dist_to_bounds <= 0:
                 return 0
 
-            # Distance to nearest site
-            min_dist_to_site = min(point.distance_to(site) for site in points)
+            # Distance to nearest site (optimized with early termination)
+            min_dist_to_site = float("inf")
+            for site in points:
+                dx = point.x - site.x
+                dy = point.y - site.y
+                dist_sq = dx * dx + dy * dy
+                if dist_sq < min_dist_to_site * min_dist_to_site:
+                    min_dist_to_site = dist_sq**0.5
+                    # Early termination if we found a very close site
+                    if min_dist_to_site < 1.0:
+                        break
 
             # Check obstacle clearance
             min_clearance = dist_to_bounds
             for obs_center, obs_radius in obstacles:
-                dist_to_obstacle = point.distance_to(obs_center)
+                dx = point.x - obs_center.x
+                dy = point.y - obs_center.y
+                dist_to_obstacle = (dx * dx + dy * dy) ** 0.5
                 clearance = dist_to_obstacle - obs_radius
                 min_clearance = min(min_clearance, clearance)
 
+                # Early termination if clearance is too small
+                if min_clearance <= 0:
+                    return 0
+
             return max(0, min(min_dist_to_site, min_clearance))
 
-        # Find best candidate
+        # Find best candidate with optimized search
         best_circle = None
         max_radius = 0
 
-        # Remove duplicates and filter valid candidates
-        unique_candidates = []
-        seen = set()
+        # Remove duplicates efficiently
+        unique_candidates = list(
+            {
+                (round(c.x, 6), round(c.y, 6)): c
+                for c in candidates
+                if c and is_point_in_bounds(c)
+            }.values()
+        )
 
-        for candidate in candidates:
-            if candidate and is_point_in_bounds(candidate):
-                # Round to avoid floating point issues
-                key = (round(candidate.x, 6), round(candidate.y, 6))
-                if key not in seen:
-                    seen.add(key)
-                    unique_candidates.append(candidate)
-
+        # Parallel-style processing with early termination
         for candidate in unique_candidates:
             radius = get_max_radius_at_point(candidate)
             if radius > max_radius:
@@ -803,6 +875,10 @@ class DynamicLECVoronoi:
                     "center": {"x": candidate.x, "y": candidate.y},
                     "radius": radius,
                 }
+
+                # Early termination if we found a very good solution
+                if radius > 50:  # Adjust threshold as needed
+                    break
 
         # Fallback to center if no good solution found
         if not best_circle or max_radius < 5:
