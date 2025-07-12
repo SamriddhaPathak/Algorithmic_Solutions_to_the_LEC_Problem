@@ -22,10 +22,10 @@ class DynamicLECVoronoi:
 
         # State management
         self.sites = []
-        self.obstacles = []
+        self.obstacle = []
         self.is_animating = False
         self.current_time = 0.0
-        self.mode = "sites"  # 'sites', 'obstacles', 'paths'
+        self.mode = "sites"  # 'sites', 'obstacle', 'paths'
         self.selected_obstacle = None
         self.temp_path = []
         self.show_voronoi = True
@@ -79,9 +79,9 @@ class DynamicLECVoronoi:
 
         info_text = """How to Use:
 • Sites Mode: Click to add Voronoi sites (red dots)
-• Obstacles Mode: Click to create obstacles and define their paths
+• obstacle Mode: Click to create obstacle and define their paths
 • Visualization: Toggle different overlays and animate obstacle movement
-• LEC (Orange): Largest Empty Circle avoiding all sites and obstacles
+• LEC (Orange): Largest Empty Circle avoiding all sites and obstacle
 • Voronoi (Blue): Voronoi diagram edges
 • Convex Hull (Green): Convex hull of all sites"""
 
@@ -137,15 +137,15 @@ class DynamicLECVoronoi:
         )
         self.sites_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
 
-        self.obstacles_button = tk.Button(
+        self.obstacle_button = tk.Button(
             button_frame,
-            text="Add Obstacles",
-            command=lambda: self.set_mode("obstacles"),
+            text="Add obstacle",
+            command=lambda: self.set_mode("obstacle"),
             bg="#95a5a6",
             fg="white",
             font=("Arial", 10),
         )
-        self.obstacles_button.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.obstacle_button.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Animation Controls
         anim_frame = tk.LabelFrame(
@@ -240,24 +240,24 @@ class DynamicLECVoronoi:
 
         self.stats_label = tk.Label(
             stats_frame,
-            text="Sites: 0\nObstacles: 0\nTime: 0.00s",
+            text="Sites: 0\nobstacle: 0\nTime: 0.00s",
             bg="white",
             font=("Arial", 10),
             justify=tk.LEFT,
         )
         self.stats_label.pack(padx=5, pady=5)
 
-        # Obstacles List
-        self.obstacles_list_frame = tk.LabelFrame(
-            control_frame, text="Obstacles", bg="white", font=("Arial", 10, "bold")
+        # obstacle List
+        self.obstacle_list_frame = tk.LabelFrame(
+            control_frame, text="obstacle", bg="white", font=("Arial", 10, "bold")
         )
-        self.obstacles_list_frame.pack(fill=tk.X, padx=10, pady=5)
+        self.obstacle_list_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        self.obstacles_listbox = tk.Listbox(
-            self.obstacles_list_frame, height=4, font=("Arial", 9)
+        self.obstacle_listbox = tk.Listbox(
+            self.obstacle_list_frame, height=4, font=("Arial", 9)
         )
-        self.obstacles_listbox.pack(fill=tk.X, padx=5, pady=5)
-        self.obstacles_listbox.bind("<<ListboxSelect>>", self.on_obstacle_select)
+        self.obstacle_listbox.pack(fill=tk.X, padx=5, pady=5)
+        self.obstacle_listbox.bind("<<ListboxSelect>>", self.on_obstacle_select)
 
         # Clear Button
         clear_button = tk.Button(
@@ -292,10 +292,10 @@ class DynamicLECVoronoi:
         # Update button colors
         if mode == "sites":
             self.sites_button.config(bg="#e74c3c")
-            self.obstacles_button.config(bg="#95a5a6")
+            self.obstacle_button.config(bg="#95a5a6")
         else:
             self.sites_button.config(bg="#95a5a6")
-            self.obstacles_button.config(bg="#8e44ad")
+            self.obstacle_button.config(bg="#8e44ad")
 
     def toggle_info(self):
         self.show_info = not self.show_info
@@ -349,17 +349,17 @@ class DynamicLECVoronoi:
 
     def clear_all(self):
         self.sites = []
-        self.obstacles = []
+        self.obstacle = []
         self.temp_path = []
         self.selected_obstacle = None
         self.current_time = 0.0
-        self.obstacles_listbox.delete(0, tk.END)
+        self.obstacle_listbox.delete(0, tk.END)
         print("All cleared")  # Debug
         self.draw()
         self.update_stats()
 
     def on_obstacle_select(self, event):
-        selection = self.obstacles_listbox.curselection()
+        selection = self.obstacle_listbox.curselection()
         if selection:
             self.selected_obstacle = selection[0]
             print(f"Selected obstacle: {self.selected_obstacle}")  # Debug
@@ -368,7 +368,7 @@ class DynamicLECVoronoi:
         self.draw()
 
     def update_stats(self):
-        stats_text = f"Sites: {len(self.sites)}\nObstacles: {len(self.obstacles)}\nTime: {self.current_time:.2f}s"
+        stats_text = f"Sites: {len(self.sites)}\nobstacle: {len(self.obstacle)}\nTime: {self.current_time:.2f}s"
         self.stats_label.config(text=stats_text)
 
     def on_canvas_click(self, event):
@@ -391,18 +391,18 @@ class DynamicLECVoronoi:
         if self.mode == "sites":
             self.sites.append({"x": x, "y": y})
             print(f"Added site: {len(self.sites)} sites total")  # Debug
-        elif self.mode == "obstacles":
+        elif self.mode == "obstacle":
             if self.selected_obstacle is not None and self.selected_obstacle < len(
-                self.obstacles
+                self.obstacle
             ):
                 # Adding to existing obstacle's path
-                self.obstacles[self.selected_obstacle]["path"].append({"x": x, "y": y})
+                self.obstacle[self.selected_obstacle]["path"].append({"x": x, "y": y})
                 print(f"Added point to obstacle {self.selected_obstacle}")  # Debug
                 # Update listbox
-                self.obstacles_listbox.delete(self.selected_obstacle)
-                self.obstacles_listbox.insert(
+                self.obstacle_listbox.delete(self.selected_obstacle)
+                self.obstacle_listbox.insert(
                     self.selected_obstacle,
-                    f"Obstacle {self.selected_obstacle + 1} ({len(self.obstacles[self.selected_obstacle]['path'])} points)",
+                    f"Obstacle {self.selected_obstacle + 1} ({len(self.obstacle[self.selected_obstacle]['path'])} points)",
                 )
             else:
                 # Create new obstacle
@@ -412,15 +412,15 @@ class DynamicLECVoronoi:
                     "path": [{"x": x, "y": y}],
                     "currentPos": {"x": x, "y": y},
                 }
-                self.obstacles.append(new_obstacle)
-                self.selected_obstacle = len(self.obstacles) - 1
+                self.obstacle.append(new_obstacle)
+                self.selected_obstacle = len(self.obstacle) - 1
                 print(
-                    f"Created new obstacle: {len(self.obstacles)} obstacles total"
+                    f"Created new obstacle: {len(self.obstacle)} obstacle total"
                 )  # Debug
 
-                # Update obstacles listbox
-                self.obstacles_listbox.insert(
-                    tk.END, f"Obstacle {len(self.obstacles)} (1 points)"
+                # Update obstacle listbox
+                self.obstacle_listbox.insert(
+                    tk.END, f"Obstacle {len(self.obstacle)} (1 points)"
                 )
 
         self.draw()
@@ -478,15 +478,15 @@ class DynamicLECVoronoi:
         return lower[:-1] + upper[:-1]
 
     def get_current_obstacle_positions(self, time):
-        """Get current positions of obstacles based on time"""
-        current_obstacles = []
+        """Get current positions of obstacle based on time"""
+        current_obstacle = []
 
-        for obstacle in self.obstacles:
+        for obstacle in self.obstacle:
             if len(obstacle["path"]) < 2:
                 current_pos = (
                     obstacle["path"][0] if obstacle["path"] else {"x": 0, "y": 0}
                 )
-                current_obstacles.append({**obstacle, "currentPos": current_pos})
+                current_obstacle.append({**obstacle, "currentPos": current_pos})
                 continue
 
             speed = obstacle.get("speed", 1)
@@ -509,11 +509,11 @@ class DynamicLECVoronoi:
                 "y": p1["y"] + (p2["y"] - p1["y"]) * local_t,
             }
 
-            current_obstacles.append({**obstacle, "currentPos": current_pos})
+            current_obstacle.append({**obstacle, "currentPos": current_pos})
 
-        return current_obstacles
+        return current_obstacle
 
-    def compute_lec(self, sites, current_obstacles):
+    def compute_lec(self, sites, current_obstacle):
         """Compute Largest Empty Circle using optimized O(n log n) approach"""
         if len(sites) < 2:
             return None
@@ -793,9 +793,9 @@ class DynamicLECVoronoi:
 
         # Convert sites to Point objects
         points = [Point(site["x"], site["y"]) for site in sites]
-        obstacles = [
+        obstacle = [
             (Point(obs["currentPos"]["x"], obs["currentPos"]["y"]), obs["radius"])
-            for obs in current_obstacles
+            for obs in current_obstacle
         ]
 
         # Generate candidates using optimized solver
@@ -840,7 +840,7 @@ class DynamicLECVoronoi:
 
             # Check obstacle clearance
             min_clearance = dist_to_bounds
-            for obs_center, obs_radius in obstacles:
+            for obs_center, obs_radius in obstacle:
                 dx = point.x - obs_center.x
                 dy = point.y - obs_center.y
                 dist_to_obstacle = (dx * dx + dy * dy) ** 0.5
@@ -935,7 +935,7 @@ class DynamicLECVoronoi:
                 self.canvas.draw()
                 return
 
-            current_obstacles = self.get_current_obstacle_positions(self.current_time)
+            current_obstacle = self.get_current_obstacle_positions(self.current_time)
 
             # Draw Voronoi diagram
             if self.show_voronoi and len(self.sites) > 1:
@@ -962,7 +962,7 @@ class DynamicLECVoronoi:
 
             # Draw LEC
             if self.show_lec and len(self.sites) >= 2:
-                lec = self.compute_lec(self.sites, current_obstacles)
+                lec = self.compute_lec(self.sites, current_obstacle)
                 if lec:
                     print(f"Drawing LEC with radius {lec['radius']:.2f}")  # Debug
                     circle = Circle(
@@ -984,9 +984,9 @@ class DynamicLECVoronoi:
                         markersize=6,
                     )
 
-            # Draw obstacles
-            print(f"Drawing {len(current_obstacles)} obstacles")  # Debug
-            for i, obstacle in enumerate(current_obstacles):
+            # Draw obstacle
+            print(f"Drawing {len(current_obstacle)} obstacle")  # Debug
+            for i, obstacle in enumerate(current_obstacle):
                 # Draw path
                 if len(obstacle["path"]) > 1:
                     path_x = [p["x"] for p in obstacle["path"]]
