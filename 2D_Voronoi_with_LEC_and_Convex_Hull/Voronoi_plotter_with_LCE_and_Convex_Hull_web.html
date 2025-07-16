@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voronoi Diagram Plotter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.4/d3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .toggle-btn {
+            background: #2196F3;
+        }
+        .toggle-btn:hover {
+            background: #1976D2;
+        }
+        .toggle-btn.active {
+            background: #FF9800;
+        }
+        .clear-btn {
+            background: #f44336;
+        }
+        .clear-btn:hover {
+            background: #da190b;
+        }
+        #canvas {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            cursor: crosshair;
+            background: white;
+        }
+        .info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .point-colors {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-left: 20px;
+        }
+        .color-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Voronoi Diagram Plotter</h1>
+        
+        <div class="controls">
+            <button id="generateBtn">Generate Random Points</button>
+            <button id="clearBtn" class="clear-btn">Clear All</button>
+            <button id="voronoiBtn" class="toggle-btn">Show Voronoi</button>
+            <button id="hullBtn" class="toggle-btn">Show Convex Hull</button>
+            <button id="circleBtn" class="toggle-btn">Show Largest Empty Circle</button>
+            
+            <div class="point-colors">
+                <span>Point Colors:</span>
+                <div class="color-indicator" style="background-color: #1f77b4;"></div>
+                <div class="color-indicator" style="background-color: #ff7f0e;"></div>
+                <div class="color-indicator" style="background-color: #2ca02c;"></div>
+                <div class="color-indicator" style="background-color: #d62728;"></div>
+                <div class="color-indicator" style="background-color: #9467bd;"></div>
+            </div>
+        </div>
+        
+        <svg id="canvas" width="800" height="600"></svg>
+        
+        <div class="info">
+            <strong>Instructions:</strong> Click on the canvas to add points. Use the buttons to toggle different visualizations.
+            The Voronoi diagram shows regions closest to each point. The convex hull shows the boundary of all points.
+            The largest empty circle is the biggest circle that doesn't contain any points.
+        </div>
+    </div>
+
+    <script>
+        const svg = d3.select("#canvas");
+        const width = 800;
+        const height = 600;
+        
+        // Color scheme matching the image
+        const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'];
+        
+        let points = [];
+        let showVoronoi = false;
+        let showHull = false;
+        let showCircle = false;
+        
+        // Button references
+        const generateBtn = document.getElementById('generateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const voronoiBtn = document.getElementById('voronoiBtn');
+        const hullBtn = document.getElementById('hullBtn');
+        const circleBtn = document.getElementById('circleBtn');
+        
+        // Event listeners
+        generateBtn.addEventListener('click', generateRandomPoints);
+        clearBtn.addEventListener('click', clearAll);
+        voronoiBtn.addEventListener('click', () => toggleFeature('voronoi'));
+        hullBtn.addEventListener('click', () => toggleFeature('hull'));
+        circleBtn.addEventListener('click', () => toggleFeature('circle'));
+        
+        svg.on('click', function(event) {
+            const [x, y] = d3.pointer(event);
+            addPoint(x, y);
+        });
+        
+        function addPoint(x, y) {
+            const colorIndex = points.length % colors.length;
+            points.push({
+                x: x,
+                y: y,
+                color: colors[colorIndex],
+                id: points.length + 1
+            });
+            render();
+        }
+        
+        function generateRandomPoints() {
+            points = [];
+            const numPoints = 5 + Math.floor(Math.random() * 8);
+            
+            for (let i = 0; i < numPoints; i++) {
+                const x = 50 + Math.random() * (width - 100);
+                const y = 50 + Math.random() * (height - 100);
+                addPoint(x, y);
+            }
+        }
+        
+        function clearAll() {
+            points = [];
+            render();
+        }
+        
+        function toggleFeature(feature) {
+            if (feature === 'voronoi') {
+                showVoronoi = !showVoronoi;
+                voronoiBtn.classList.toggle('active', showVoronoi);
+            } else if (feature === 'hull') {
+                showHull = !showHull;
+                hullBtn.classList.toggle('active', showHull);
+            } else if (feature === 'circle') {
+                showCircle = !showCircle;
+                circleBtn.classList.toggle('active', showCircle);
+            }
+            render();
+        }
+        
+        function render() {
+            svg.selectAll("*").remove();
+            
+            if (points.length === 0) return;
+            
+            // Draw Voronoi diagram
+            if (showVoronoi && points.length > 1) {
+                drawVoronoi();
+            }
+            
+            // Draw convex hull
+            if (showHull && points.length > 2) {
+                drawConvexHull();
+            }
+            
+            // Draw largest empty circle
+            if (showCircle && points.length > 0) {
+                drawLargestEmptyCircle();
+            }
+            
+            // Draw points
+            drawPoints();
+        }
+        
+        function drawVoronoi() {
+            const voronoi = d3.Delaunay.from(points, d => d.x, d => d.y).voronoi([0, 0, width, height]);
+            
+            points.forEach((point, i) => {
+                const cell = voronoi.cellPolygon(i);
+                if (cell) {
+                    svg.append('path')
+                        .datum(cell)
+                        .attr('d', d3.line())
+                        .attr('fill', 'none')
+                        .attr('stroke', '#333')
+                        .attr('stroke-width', 2)
+                        .attr('stroke-dasharray', '5,5');
+                }
+            });
+        }
+        
+        function drawConvexHull() {
+            const hull = d3.polygonHull(points.map(p => [p.x, p.y]));
+            if (hull && hull.length > 2) {
+                svg.append('path')
+                    .datum(hull)
+                    .attr('d', d3.line().curve(d3.curveLinearClosed))
+                    .attr('fill', 'none')
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 3);
+            }
+        }
+        
+        function drawLargestEmptyCircle() {
+            const circle = findLargestEmptyCircle();
+            if (circle) {
+                svg.append('circle')
+                    .attr('cx', circle.x)
+                    .attr('cy', circle.y)
+                    .attr('r', circle.r)
+                    .attr('fill', 'none')
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '10,5');
+            }
+        }
+        
+        function findLargestEmptyCircle() {
+            if (points.length === 0) return null;
+            
+            let bestCircle = null;
+            let maxRadius = 0;
+            
+            // Check circle centers at various grid points
+            const step = 20;
+            for (let x = step; x < width - step; x += step) {
+                for (let y = step; y < height - step; y += step) {
+                    const minDist = Math.min(...points.map(p => 
+                        Math.sqrt((p.x - x) ** 2 + (p.y - y) ** 2)
+                    ));
+                    
+                    if (minDist > maxRadius) {
+                        maxRadius = minDist;
+                        bestCircle = { x, y, r: minDist };
+                    }
+                }
+            }
+            
+            // Also check Voronoi vertices
+            if (points.length > 1) {
+                const delaunay = d3.Delaunay.from(points, d => d.x, d => d.y);
+                const voronoi = delaunay.voronoi([0, 0, width, height]);
+                
+                for (let i = 0; i < points.length; i++) {
+                    const cell = voronoi.cellPolygon(i);
+                    if (cell) {
+                        for (const vertex of cell) {
+                            const [x, y] = vertex;
+                            if (x > 0 && x < width && y > 0 && y < height) {
+                                const minDist = Math.min(...points.map(p => 
+                                    Math.sqrt((p.x - x) ** 2 + (p.y - y) ** 2)
+                                ));
+                                
+                                if (minDist > maxRadius) {
+                                    maxRadius = minDist;
+                                    bestCircle = { x, y, r: minDist };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return bestCircle;
+        }
+        
+        function drawPoints() {
+            const pointGroups = svg.selectAll('.point-group')
+                .data(points)
+                .enter()
+                .append('g')
+                .attr('class', 'point-group');
+            
+            // Draw point circles
+            pointGroups.append('circle')
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y)
+                .attr('r', 6)
+                .attr('fill', d => d.color)
+                .attr('stroke', '#333')
+                .attr('stroke-width', 2);
+            
+            // Draw point labels
+            pointGroups.append('text')
+                .attr('x', d => d.x)
+                .attr('y', d => d.y - 12)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .attr('fill', '#333')
+                .text(d => d.id);
+        }
+        
+        // Initialize with some sample points
+        generateRandomPoints();
+    </script>
+</body>
+</html>
